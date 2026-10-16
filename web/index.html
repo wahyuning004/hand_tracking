@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trend Jari Camera - Eka Wahyuning Tiyasa</title>
+  
+  <!-- MediaPipe Hands & Camera Utils CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at center, #151827 0%, #08090f 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    /* Bingkai Kamera Eksklusif dengan Nama Eka Wahyuning Tiyasa */
+    .camera-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(145deg, rgba(25, 29, 44, 0.95), rgba(12, 14, 22, 0.95));
+      padding: 16px 16px 20px 16px;
+      border-radius: 28px;
+      border: 2px solid rgba(255, 0, 119, 0.35);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 
+                  0 0 35px rgba(255, 0, 119, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    /* Header Bingkai */
+    .frame-header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 10px 12px 10px;
+    }
+
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #ff0077, #00ffe6, #ff0077);
+      background-size: 200% auto;
+      color: transparent;
+      -webkit-background-clip: text;
+      animation: gradientShift 4s linear infinite;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @keyframes gradientShift {
+      0% { background-position: 0% center; }
+      100% { background-position: 200% center; }
+    }
+
+    .rec-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .rec-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #ff0055;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #ff0055;
+      animation: blink 1.2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Layar Video Kamera */
+    .camera-frame {
+      position: relative;
+      width: 760px;
+      max-width: 90vw;
+      aspect-ratio: 4 / 3;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1.5px solid rgba(255, 255, 255, 0.1);
+      background: #000;
+      box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.8);
+    }
+
+    #webcam-video {
+      display: none;
+    }
+
+    #output-canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      display: block;
+    }
+
+    /* Loading Spinner */
+    #loading {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0d0f17;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 0.4s ease;
+    }
+    .spinner {
+      width: 38px;
+      height: 38px;
+      border: 3px solid rgba(255, 255, 255, 0.12);
+      border-top-color: #ff0077;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="camera-wrapper">
+    <!-- Header Bingkai dengan Nama Eka Wahyuning Tiyasa -->
+    <div class="frame-header">
+      <div class="brand-name">
+        <span>✨ Eka Wahyuning Tiyasa ✨</span>
+      </div>
+      <div class="rec-indicator">
+        <div class="rec-dot"></div>
+        <span>CAMERA ON</span>
+      </div>
+    </div>
+
+    <!-- Layar Kamera -->
+    <div class="camera-frame">
+      <video id="webcam-video" playsinline></video>
+      <canvas id="output-canvas"></canvas>
+      <canvas id="crop-canvas" style="display: none;"></canvas>
+
+      <div id="loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('webcam-video');
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    
+    // Canvas kecil khusus rendering filter kotak (60 FPS)
+    const cropCanvas = document.getElementById('crop-canvas');
+    const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
+
+    const loadingOverlay = document.getElementById('loading');
+
+    // Suara Efek Filter Switch
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSwitchSound() {
+      try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(950, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+      } catch(e) {}
+    }
+
+    // --- DAFTAR FILTER KOTAK ---
+    const FILTER_MODES = ["THERMAL", "INFERNO", "GLITCH", "NEON_MATRIX", "RAINBOW"];
+    let currentFilterIdx = 0;
+    let lastSwitchTime = 0;
+
+    // Lookup Table (LUT)
+    const LUT_THERMAL = new Uint32Array(256);
+    const LUT_INFERNO = new Uint32Array(256);
+    const LUT_RAINBOW = new Uint32Array(256);
+
+    for (let lum = 0; lum < 256; lum++) {
+      let r = 0, g = 0, b = 0;
+      if (lum < 64) {
+        b = 255; g = Math.floor(lum * 4);
+      } else if (lum < 128) {
+        g = 255; b = Math.floor(255 - (lum - 64) * 4);
+      } else if (lum < 192) {
+        g = 255; r = Math.floor((lum - 128) * 4);
+      } else {
+        r = 255; g = Math.floor(255 - (lum - 192) * 4);
+      }
+      LUT_THERMAL[lum] = (255 << 24) | (b << 16) | (g << 8) | r;
+
+      let ir = Math.min(255, lum * 2.2);
+      let ig = lum > 100 ? Math.min(255, (lum - 100) * 2.4) : lum * 0.3;
+      let ib = lum > 180 ? Math.min(255, (lum - 180) * 3) : 25;
+      LUT_INFERNO[lum] = (255 << 24) | (Math.floor(ib) << 16) | (Math.floor(ig) << 8) | Math.floor(ir);
+
+      let hue = (lum * 360) / 255;
+      let h_i = Math.floor(hue / 60) % 6;
+      let f = (hue / 60) - Math.floor(hue / 60);
+      let q = Math.floor(255 * (1 - f));
+      let t = Math.floor(255 * f);
+      let rr = 0, gg = 0, bb = 0;
+      if (h_i === 0) { rr = 255; gg = t; bb = 0; }
+      else if (h_i === 1) { rr = q; gg = 255; bb = 0; }
+      else if (h_i === 2) { rr = 0; gg = 255; bb = t; }
+      else if (h_i === 3) { rr = 0; gg = q; bb = 255; }
+      else if (h_i === 4) { rr = t; gg = 0; bb = 255; }
+      else { rr = 255; gg = 0; bb = q; }
+      LUT_RAINBOW[lum] = (255 << 24) | (bb << 16) | (gg << 8) | rr;
+    }
+
+    function dist(p1, p2, w, h) {
+      const dx = (p1.x - p2.x) * w;
+      const dy = (p1.y - p2.y) * h;
+      return Math.hypot(dx, dy);
+    }
+
+    // CEK APAKAH JARI TELUNJUK DAN JEMPOL AKTIF TERBUKA
+    function isThumbAndIndexOpen(lm, w, h) {
+      const wrist = lm[0];
+      const handSize = dist(lm[0], lm[9], w, h);
+      const thumbTip = lm[4], thumbMcp = lm[2];
+      const indexTip = lm[8], indexPip = lm[6];
+
+      // Telunjuk harus terentang lurus
+      const indexOpen = dist(indexTip, wrist, w, h) > dist(indexPip, wrist, w, h) * 1.15;
+      // Jempol harus terentang terbuka menjauh dari telapak
+      const thumbOpen = dist(thumbTip, thumbMcp, w, h) > handSize * 0.35;
+
+      return indexOpen && thumbOpen;
+    }
+
+    // CEK APAKAH SEMUA JARI MENGHADAP KE BAWAH
+    function isFiveFingersPointingDown(lm, w, h) {
+      const wrist = lm[0];
+      const tips = [lm[4], lm[8], lm[12], lm[16], lm[20]];
+      const mcps = [lm[2], lm[5], lm[9], lm[13], lm[17]];
+
+      let downCount = 0;
+      for (let i = 0; i < 5; i++) {
+        if (tips[i].y > mcps[i].y && tips[i].y > wrist.y * 0.95) {
+          downCount++;
+        }
+      }
+      return downCount >= 4;
+    }
+
+    // Sambaran Petir Neon ke Bawah
+    function renderDownwardLightning(ctx, tips, w, h, time) {
+      ctx.save();
+      const colors = ['#00ffe6', '#ff0077', '#00ff88', '#ffff00', '#7000ff'];
+
+      tips.forEach((pt, idx) => {
+        const startX = pt.x * w;
+        const startY = pt.y * h;
+        const targetY = h;
+        const boltColor = colors[idx % colors.length];
+
+        ctx.strokeStyle = boltColor;
+        ctx.shadowColor = boltColor;
+        ctx.shadowBlur = 15;
+        ctx.lineWidth = 3.2;
+
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+
+        let curX = startX;
+        let curY = startY;
+        const segments = 9;
+        const stepY = (targetY - startY) / segments;
+
+        for (let s = 1; s <= segments; s++) {
+          curY += stepY;
+          const noise = (Math.sin(time * 0.05 + s + idx) * 12) + ((Math.random() - 0.5) * 16);
+          curX += noise;
+          ctx.lineTo(curX, curY);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(startX, startY, 7 + Math.random() * 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ffffff';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(curX, h - 3, 10 + Math.random() * 6, 0, Math.PI * 2);
+        ctx.fillStyle = boltColor;
+        ctx.fill();
+      });
+
+      ctx.restore();
+    }
+
+    // Terapkan Filter di Kotak 4 Jari
+    function applyCropFilter(ctx, poly, w, h, mode) {
+      let minX = w, maxX = 0, minY = h, maxY = 0;
+      for (const p of poly) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      minX = Math.max(0, Math.floor(minX));
+      maxX = Math.min(w, Math.ceil(maxX));
+      minY = Math.max(0, Math.floor(minY));
+      maxY = Math.min(h, Math.ceil(maxY));
+
+      const boxW = maxX - minX;
+      const boxH = maxY - minY;
+      if (boxW <= 6 || boxH <= 6) return;
+
+      cropCanvas.width = boxW;
+      cropCanvas.height = boxH;
+      cropCtx.drawImage(canvasElement, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
+
+      const imgData = cropCtx.getImageData(0, 0, boxW, boxH);
+      const buf32 = new Uint32Array(imgData.data.buffer);
+      const len = buf32.length;
+
+      if (mode === "THERMAL") {
+        for (let i = 0; i < len; i++) {
+          const px = buf32[i];
+          const lum = ((px & 0xFF) * 77 + ((px >> 8) & 0xFF) * 150 + ((px >> 16) & 0xFF) * 29) >> 8;
+          buf32[i] = LUT_THERMAL[lum];
+        }
+      } else if (mode === "INFERNO") {
+        for (let i = 0; i < len; i++) {
+          const px = buf32[i];
+          const lum = ((px & 0xFF) * 77 + ((px >> 8) & 0xFF) * 150 + ((px >> 16) & 0xFF) * 29) >> 8;
+          buf32[i] = LUT_INFERNO[lum];
+        }
+      } else if (mode === "RAINBOW") {
+        for (let i = 0; i < len; i++) {
+          const px = buf32[i];
+          const lum = ((px & 0xFF) * 77 + ((px >> 8) & 0xFF) * 150 + ((px >> 16) & 0xFF) * 29) >> 8;
+          buf32[i] = LUT_RAINBOW[lum];
+        }
+      } else if (mode === "GLITCH") {
+        const shift = 15;
+        const d = imgData.data;
+        for (let y = 0; y < boxH; y++) {
+          for (let x = boxW - 1; x >= shift; x--) {
+            const cur = (y * boxW + x) * 4;
+            const prev = (y * boxW + (x - shift)) * 4;
+            d[cur] = d[prev];
+          }
+        }
+      } else if (mode === "NEON_MATRIX") {
+        for (let i = 0; i < len; i++) {
+          const px = buf32[i];
+          const r = px & 0xFF, g = (px >> 8) & 0xFF, b = (px >> 16) & 0xFF;
+          const lum = (r * 77 + g * 150 + b * 29) >> 8;
+          buf32[i] = (255 << 24) | (Math.min(255, lum * 2) << 16) | (Math.min(255, lum * 3) << 8) | (lum < 50 ? 0 : 40);
+        }
+      }
+
+      cropCtx.putImageData(imgData, 0, 0);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) {
+        ctx.lineTo(poly[i].x, poly[i].y);
+      }
+      ctx.closePath();
+      ctx.clip();
+
+      ctx.drawImage(cropCanvas, minX, minY);
+      ctx.restore();
+    }
+
+    function onResults(results) {
+      loadingOverlay.style.opacity = '0';
+      setTimeout(() => { loadingOverlay.style.display = 'none'; }, 400);
+
+      const w = canvasElement.width = videoElement.videoWidth || 640;
+      const h = canvasElement.height = videoElement.videoHeight || 480;
+      const now = performance.now();
+
+      // Gambar Video Asli
+      canvasCtx.drawImage(results.image, 0, 0, w, h);
+
+      let portalPoly = null;
+
+      if (results.multiHandLandmarks) {
+        const numHands = results.multiHandLandmarks.length;
+        let anyHandPointingDown = false;
+
+        // 1. Cek setiap tangan apakah menunjuk ke bawah (Petir) atau sentuh jempol-kelingking (Ganti Filter)
+        for (let i = 0; i < numHands; i++) {
+          const lm = results.multiHandLandmarks[i];
+
+          // Jika 5 jari menghadap ke bawah -> MUNCULKAN PETIR
+          if (isFiveFingersPointingDown(lm, w, h)) {
+            anyHandPointingDown = true;
+            const fiveTips = [lm[4], lm[8], lm[12], lm[16], lm[20]];
+            renderDownwardLightning(canvasCtx, fiveTips, w, h, now);
+          }
+
+          // Cek ganti filter: sentuh jempol & kelingking
+          const thumbTip = lm[4], pinkyTip = lm[20];
+          const handSize = dist(lm[0], lm[9], w, h);
+          const touchRatio = dist(thumbTip, pinkyTip, w, h) / Math.max(30, handSize);
+
+          if (touchRatio < 0.45) {
+            if (now - lastSwitchTime > 700) {
+              currentFilterIdx = (currentFilterIdx + 1) % FILTER_MODES.length;
+              lastSwitchTime = now;
+              playSwitchSound();
+            }
+          }
+        }
+
+        // 2. KOTAK 2 TANGAN:
+        // ATURAN:
+        // A) JIKA SEMUA JARI KE BAWAH -> JANGAN ADA KOTAK SAMA SEKALI (HANYA PETIR)!
+        // B) KETIKA JARI TELUNJUK DAN JEMPOL TIDAK DIBUKA -> TIDAK ADA KOTAK!
+        if (numHands >= 2 && !anyHandPointingDown) {
+          const h1 = results.multiHandLandmarks[0];
+          const h2 = results.multiHandLandmarks[1];
+
+          // Cek apakah jari telunjuk & jempol KEDUA TANGAN benar-benar terbuka:
+          const h1Open = isThumbAndIndexOpen(h1, w, h);
+          const h2Open = isThumbAndIndexOpen(h2, w, h);
+
+          if (h1Open && h2Open) {
+            portalPoly = [
+              { x: h1[8].x * w, y: h1[8].y * h }, // Telunjuk Tangan 1
+              { x: h2[8].x * w, y: h2[8].y * h }, // Telunjuk Tangan 2
+              { x: h2[4].x * w, y: h2[4].y * h }, // Jempol Tangan 2
+              { x: h1[4].x * w, y: h1[4].y * h }  // Jempol Tangan 1
+            ];
+          }
+        }
+      }
+
+      // --- RENDER KOTAK HANYA JIKA SYARAT TERPENUHI ---
+      if (portalPoly) {
+        const mode = FILTER_MODES[currentFilterIdx];
+        applyCropFilter(canvasCtx, portalPoly, w, h, mode);
+
+        // Garis batas kotak neon cyan
+        canvasCtx.save();
+        canvasCtx.strokeStyle = '#00ffe6';
+        canvasCtx.lineWidth = 3.5;
+        canvasCtx.shadowColor = '#00ffe6';
+        canvasCtx.shadowBlur = 12;
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(portalPoly[0].x, portalPoly[0].y);
+        for (let i = 1; i < portalPoly.length; i++) {
+          canvasCtx.lineTo(portalPoly[i].x, portalPoly[i].y);
+        }
+        canvasCtx.closePath();
+        canvasCtx.stroke();
+
+        // Titik sudut bercahaya pada 4 ujung jari
+        portalPoly.forEach(pt => {
+          canvasCtx.beginPath();
+          canvasCtx.arc(pt.x, pt.y, 6.5, 0, Math.PI * 2);
+          canvasCtx.fillStyle = '#ff0077';
+          canvasCtx.fill();
+          canvasCtx.strokeStyle = '#ffffff';
+          canvasCtx.lineWidth = 2;
+          canvasCtx.stroke();
+        });
+        canvasCtx.restore();
+      }
+    }
+
+    // MediaPipe Hands (60 FPS)
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.55,
+      minTrackingConfidence: 0.55
+    });
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
+
+    camera.start().catch((err) => {
+      alert("Gagal mengakses webcam: " + err.message);
+      loadingOverlay.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
